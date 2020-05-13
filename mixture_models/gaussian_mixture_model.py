@@ -63,12 +63,21 @@ def maximum_likelihood_estimation(X, y, num_classes):
     
     # Compute distribution parameters for each class
     for j in range(num_classes):
-        X_class_j = X[y == j]
+        # Mask data to get class-wise info
+        X_class_j = X[y == j]    
+        class_len = np.sum((y == j) * 1)
         
-        class_prior = np.sum((y == j) * 1) / len(y)
-        class_means_array = np.sum(X_class_j, 0) / np.sum((y == j) * 1)
+        # Compute priors and means
+        class_prior = class_len / len(y)
+        class_means_array = np.sum(X_class_j, 0) / class_len
         
-        class_cov_matrix  = np.cov(X_class_j, X_class_j, ddof = 1)
+        # Compute covariance matrix
+        class_cov_matrix = np.zeros( (len(class_means_array),len(class_means_array)) )
+        for i in range(class_len):
+            data_minus_means = X_class_j[i] - class_means_array
+            submatrix = np.inner(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array)))
+            class_cov_matrix += submatrix
+        class_cov_matrix /= class_len  
         
         all_priors.append(class_prior)
         all_means.append(class_means_array)
@@ -77,12 +86,52 @@ def maximum_likelihood_estimation(X, y, num_classes):
     return all_priors, all_means, all_covariances
 
     
+def weighted_mle(X, weights):
+    if len(X) != len(weights):
+        print("Error, data matrix and labels array are incompatible")
+        exit(-1)
+        
+    X = np.array(X)
+    weights = np.array(weights)
+    
+    # Store means arrays and covariance matrices for all classes
+    all_priors = []
+    all_means = []
+    all_covariances = []
+    
+    # Compute distribution parameters for each class
+    for j in range(num_classes):
+        class_len = np.sum(weights[:,j])
+        
+        # Compute priors and means
+        class_prior = class_len / len(weights)
+        class_means_array = np.sum(X * weights[:, j], 0) / class_len
+        
+        # Compute covariance matrix
+        class_cov_matrix = np.zeros( (len(class_means_array),len(class_means_array)) )
+        for i in range(len(weights)):
+            data_minus_means = X[i] - class_means_array
+            submatrix = weights[i,j] * np.inner(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array)))
+            class_cov_matrix += submatrix
+        class_cov_matrix /= class_len  
+        
+        all_priors.append(class_prior)
+        all_means.append(class_means_array)
+        all_covariances.append(class_cov_matrix)
+    
+    return all_priors, all_means, all_covariances
+    
 # 
 def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
     num_classes = 2
+    X_labeled = np.array(X_labeled)
+    X_unlabeled = np.array(X_unlabeled)
+    y = np.array(y)
+    weights_labeled = np.transpose(np.vstack( (y, (1-y)) ))
+    
     # Initialize MLE on labeled data
     # Priors are used for all instances
-    all_priors, all_means, all_covariances = maximum_likelihood_estimation(X_labeled, y)
+    all_priors, all_means, all_covariances = maximum_likelihood_estimation(X_labeled, y , num_classes)
     
     ## Loop
     for _ in range(num_iterations):
@@ -103,9 +152,12 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
             unlabeled_conditionals.append(array_conditionals)
         
         # Compute MLE on whole data
+        all_weights = np.vstack(weights_labeled, unlabeled_conditionals)    
+        all_priors, all_means, all_covariances = weighted_mle(np.vstack((X_labeled,X_unlabeled)), weights)
     
     
+        # Check for convergence
     
-    pass
+    return all_priors, all_means, all_covariances
     
     
