@@ -46,47 +46,31 @@ def multivariate_gaussian_pdf(data_array, means_array, covariance_matrix):
     
     return probability
 
-    
-#  
-def maximum_likelihood_estimation(X, y, num_classes):
-    if len(X) != len(y):
-        print("Error, data matrix and labels array are incompatible")
-        exit(-1)
-        
-    X = np.array(X)
-    y = np.array(y)
-    
-    # Store means arrays and covariance matrices for all classes
-    all_priors = []
-    all_means = []
-    all_covariances = []
-    
-    # Compute distribution parameters for each class
-    for j in range(num_classes):
-        # Mask data to get class-wise info
-        X_class_j = X[y == j]    
-        class_len = np.sum((y == j) * 1)
-        
-        # Compute priors and means
-        class_prior = class_len / len(y)
-        class_means_array = np.sum(X_class_j, 0) / class_len
-        
-        # Compute covariance matrix
-        class_cov_matrix = np.zeros( (len(class_means_array),len(class_means_array)) )
-        for i in range(class_len):
-            data_minus_means = X_class_j[i] - class_means_array
-            submatrix = np.inner(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array)))
-            class_cov_matrix += submatrix
-        class_cov_matrix /= class_len  
-        
-        all_priors.append(class_prior)
-        all_means.append(class_means_array)
-        all_covariances.append(class_cov_matrix)
-    
-    return all_priors, all_means, all_covariances
 
+# Data log likelihood for a mixture of Gaussians
+def gaussian_mixture_log_likelihood(X_labeled, y_array, X_unlabeled, all_priors, all_means, all_covariances, num_classes):
     
-def weighted_mle(X, weights):
+    log_likelihood = 0.0
+    for j in range(num_classes):
+        class_prior = all_priors[j]
+        class_means_array = all_means[j]
+        class_cov_matrix = all_covariances[j]
+        X_class = X_labeled[y_array == j]
+        y_class = y_array[y_array == j]
+        
+        for data_array, y in zip(X_class, y_class):
+            class_conditional = multivariate_gaussian_pdf(data_array, class_means_array, class_cov_matrix)
+            log_likelihood += math.log( class_prior * class_conditional )
+        
+        for data_array in X_unlabeled:
+            class_conditional = multivariate_gaussian_pdf(data_array, class_means_array, class_cov_matrix)
+            log_likelihood += math.log ( class_prior  * class_conditional )
+        
+    return log_likelihood
+    
+    
+# Given a data and weights matrices, return the MLE for a the Gaussian distribution
+def maximum_likelihood_estimation(X, weights, num_classes):
     if len(X) != len(weights):
         print("Error, data matrix and labels array are incompatible")
         exit(-1)
@@ -110,9 +94,10 @@ def weighted_mle(X, weights):
         # Compute covariance matrix
         class_cov_matrix = np.zeros( (len(class_means_array),len(class_means_array)) )
         for i in range(len(weights)):
-            data_minus_means = X[i] - class_means_array
-            submatrix = weights[i,j] * np.inner(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array)))
-            class_cov_matrix += submatrix
+            if weights[i,j] != 0:
+                data_minus_means = X[i] - class_means_array
+                submatrix = weights[i,j] * np.inner(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array)))
+                class_cov_matrix += submatrix
         class_cov_matrix /= class_len  
         
         all_priors.append(class_prior)
@@ -131,7 +116,7 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
     
     # Initialize MLE on labeled data
     # Priors are used for all instances
-    all_priors, all_means, all_covariances = maximum_likelihood_estimation(X_labeled, y , num_classes)
+    all_priors, all_means, all_covariances = maximum_likelihood_estimation(X_labeled, weights_labeled, num_classes)
     
     ## Loop
     for _ in range(num_iterations):
@@ -153,10 +138,10 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
         
         # Compute MLE on whole data
         all_weights = np.vstack(weights_labeled, unlabeled_conditionals)    
-        all_priors, all_means, all_covariances = weighted_mle(np.vstack((X_labeled,X_unlabeled)), weights)
-    
+        all_priors, all_means, all_covariances = weighted_mle(np.vstack((X_labeled,X_unlabeled)), all_weights, num_classes)
     
         # Check for convergence
+        mixture_log_likelihood = gaussian_mixture_log_likelihood(X_labeled, y, X_unlabeled, all_priors, all_means, all_covariances, num_classes)
     
     return all_priors, all_means, all_covariances
     
