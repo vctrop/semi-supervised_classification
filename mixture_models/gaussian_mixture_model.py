@@ -1,6 +1,7 @@
 #!python3
 
 # Copyright (C) 2020  Academic League of Neurosciences (NeuroLiga), from Federal University of Santa Maria (UFSM) 
+# Available at <https://github.com/vctrop/semi-supervised_drowsiness_detection/>
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -33,12 +34,12 @@ def multivariate_gaussian_pdf(data_array, means_array, covariance_matrix):
     
     # Compute determinant and inverse of covariance matrix
     cov_det = np.linalg.det(covariance_matrix)
-    cov_inv = np.linalg.inv(covariance_matrix)
+    cov_inv = np.linalg.pinv(covariance_matrix)
     
     # Compute exponent of Gaussian distribution
     data_sub_means = data_array - means_array
-    exponent = (-1/2) * np.dot( np.dot(np.reshape(data_sub_means, (1,len(data_array))), cov_inv),
-                                np.reshape(data_sub_means(len(data_array),1))) 
+    exponent = (-1/2) * np.dot( np.dot( np.reshape(data_sub_means, (1,len(data_array)) ), cov_inv),
+                                        np.reshape(data_sub_means, (len(data_array),1) )) 
     
     # Compute probability of data array being sampled by the given Gaussian
     denominator = ((2 * math.pi) ** (len(data_array)/2)) * (cov_det ** 2)
@@ -89,17 +90,22 @@ def maximum_likelihood_estimation(X, weights, num_classes):
         
         # Compute priors and means
         class_prior = class_len / len(weights)
-        class_means_array = np.sum(X * weights[:, j], 0) / class_len
+        class_means_array = np.sum(X * (weights[:, j])[:, None], 0) / class_len
         
         # Compute covariance matrix
+        np_cov = np.cov((X[weights[:,j]==1]).T)
+        print(np_cov)
         class_cov_matrix = np.zeros( (len(class_means_array),len(class_means_array)) )
         for i in range(len(weights)):
             if weights[i,j] != 0:
                 data_minus_means = X[i] - class_means_array
-                submatrix = weights[i,j] * np.inner(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array)))
-                class_cov_matrix += submatrix
-        class_cov_matrix /= class_len  
-        
+                inner_prod = np.dot(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array))))
+                # print(inner_prod)
+                submatrix = weights[i,j] * inner_prod
+                # print(submatrix)
+                class_cov_matrix[:,:] = class_cov_matrix + submatrix
+        class_cov_matrix = class_cov_matrix / class_len  
+        print(class_cov_matrix)
         all_priors.append(class_prior)
         all_means.append(class_means_array)
         all_covariances.append(class_cov_matrix)
@@ -118,8 +124,13 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
     # Priors are used for all instances
     all_priors, all_means, all_covariances = maximum_likelihood_estimation(X_labeled, weights_labeled, num_classes)
     
+    # print(all_priors)
+    # print(all_means)
+    # print(all_covariances)
+    exit(1)
     ## Loop
-    for _ in range(num_iterations):
+    #for _ in range(num_iterations):
+    for _ in range(1):
         # Assign conditional probabilities p(y|x) to unlabeled data with Gaussian mixture
         unlabeled_conditionals = []
         for data_array in X_unlabeled:
@@ -131,18 +142,20 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
                 class_cov_matrix = all_covariances[j]
                 
                 class_conditional_prob = multivariate_gaussian_pdf(data_array, class_means_array, class_cov_matrix)
+                # print(class_conditional_prob)
                 array_conditionals.append(class_prior * class_conditional_prob)
             
             array_conditionals = np.array(array_conditionals)/np.sum(array_conditionals)
+            # print(array_conditionals)
             unlabeled_conditionals.append(array_conditionals)
         
         # Compute MLE on whole data
-        all_weights = np.vstack(weights_labeled, unlabeled_conditionals)    
-        all_priors, all_means, all_covariances = weighted_mle(np.vstack((X_labeled,X_unlabeled)), all_weights, num_classes)
+        all_weights = np.vstack((weights_labeled, unlabeled_conditionals))
+        all_priors, all_means, all_covariances = maximum_likelihood_estimation(np.vstack((X_labeled,X_unlabeled)), all_weights, num_classes)
     
         # Check for convergence
         mixture_log_likelihood = gaussian_mixture_log_likelihood(X_labeled, y, X_unlabeled, all_priors, all_means, all_covariances, num_classes)
     
-    return all_priors, all_means, all_covariances
+    return mixture_log_likelihood, all_priors, all_means, all_covariances
     
     
