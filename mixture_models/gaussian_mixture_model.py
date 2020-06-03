@@ -71,9 +71,11 @@ def gaussian_mixture_log_likelihood(X_labeled, y_array, X_unlabeled, all_priors,
     
     
 # Given a data and weights matrices, return the MLE for a the Gaussian distribution
+# Data matrix is (instances, dimensions)
+# Weights matrix is (instances, num_classes)
 def maximum_likelihood_estimation(X, weights, num_classes):
     if len(X) != len(weights):
-        print("Error, data matrix and labels array are incompatible")
+        print("Error, data and weights matrices are incompatible")
         exit(-1)
         
     X = np.array(X)
@@ -90,26 +92,30 @@ def maximum_likelihood_estimation(X, weights, num_classes):
         
         # Compute priors and means
         class_prior = class_len / len(weights)
-        class_means_array = np.sum(X * (weights[:, j])[:, None], 0) / class_len
+        weighted_X = X * (weights[:, j])[:, None]
+        class_means_array = np.sum(weighted_X, 0) / class_len
+        dimensionality = len(class_means_array)
         
         # Compute covariance matrix
-        np_cov = np.cov((X[weights[:,j]==1]).T)
-        print(np_cov)
-        class_cov_matrix = np.zeros( (len(class_means_array),len(class_means_array)) )
+        transp_class_X = (X[weights[:,j]==1]).T
+        # np_cov = np.cov(transp_class_X, bias=True)
+        # print(np_cov)
+        
+        class_cov_matrix = np.zeros((dimensionality,dimensionality))
         for i in range(len(weights)):
             if weights[i,j] != 0:
                 data_minus_means = X[i] - class_means_array
-                inner_prod = np.dot(np.reshape(data_minus_means, (len(class_means_array),1)), np.reshape(data_minus_means, (1, len(class_means_array))))
-                # print(inner_prod)
+                inner_prod = np.dot(np.reshape(data_minus_means, (dimensionality,1)), np.reshape(data_minus_means, (1,dimensionality)))
                 submatrix = weights[i,j] * inner_prod
-                # print(submatrix)
-                class_cov_matrix[:,:] = class_cov_matrix + submatrix
+                class_cov_matrix += submatrix
+                
         class_cov_matrix = class_cov_matrix / class_len  
         print(class_cov_matrix)
+
         all_priors.append(class_prior)
         all_means.append(class_means_array)
         all_covariances.append(class_cov_matrix)
-    
+        
     return all_priors, all_means, all_covariances
     
 # 
