@@ -18,6 +18,7 @@
 
 import math             # Single-value math operations
 import numpy as np      # Vector math operations
+from scipy.stats import multivariate_normal
 
 # Compute the probability of a given data array being sampled from a given multivariate Gaussian distribution
 def multivariate_gaussian_pdf(data_array, means_array, covariance_matrix):
@@ -42,7 +43,7 @@ def multivariate_gaussian_pdf(data_array, means_array, covariance_matrix):
                                         np.reshape(data_sub_means, (len(data_array),1) )) 
     
     # Compute probability of data array being sampled by the given Gaussian
-    denominator = ((2 * math.pi) ** (len(data_array)/2)) * (cov_det ** 2)
+    denominator = ((2 * math.pi) ** (len(data_array)/2)) * (cov_det ** (1/2))
     probability = (1 / denominator) * math.exp(exponent)
     
     return probability
@@ -60,7 +61,7 @@ def gaussian_mixture_log_likelihood(X_labeled, y_array, X_unlabeled, all_priors,
         y_class = y_array[y_array == j]
         
         for data_array, y in zip(X_class, y_class):
-            class_conditional = multivariate_gaussian_pdf(data_array, class_means_array, class_cov_matrix)
+            class_conditional = multivariate_gaussian_pdf(data_array, class_means_array, class_cov_matrix)            
             log_likelihood += math.log( class_prior * class_conditional )
         
         for data_array in X_unlabeled:
@@ -110,7 +111,7 @@ def maximum_likelihood_estimation(X, weights, num_classes):
                 class_cov_matrix += submatrix
                 
         class_cov_matrix = class_cov_matrix / class_len  
-        print(class_cov_matrix)
+        # print(class_cov_matrix)
 
         all_priors.append(class_prior)
         all_means.append(class_means_array)
@@ -129,11 +130,10 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
     # Initialize MLE on labeled data
     # Priors are used for all instances
     all_priors, all_means, all_covariances = maximum_likelihood_estimation(X_labeled, weights_labeled, num_classes)
-    
     # print(all_priors)
     # print(all_means)
     # print(all_covariances)
-    exit(1)
+    
     ## Loop
     #for _ in range(num_iterations):
     for _ in range(1):
@@ -148,9 +148,13 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
                 class_cov_matrix = all_covariances[j]
                 
                 class_conditional_prob = multivariate_gaussian_pdf(data_array, class_means_array, class_cov_matrix)
+                print('my: ' + str(class_conditional_prob))
+                print('scipy: ' + str(multivariate_normal(class_means_array, class_cov_matrix).pdf(data_array)))
+                # exit(-1)
+                
                 # print(class_conditional_prob)
+                
                 array_conditionals.append(class_prior * class_conditional_prob)
-            
             array_conditionals = np.array(array_conditionals)/np.sum(array_conditionals)
             # print(array_conditionals)
             unlabeled_conditionals.append(array_conditionals)
