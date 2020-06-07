@@ -27,11 +27,14 @@ def multivariate_gaussian_pdf(data_array, means_array, covariance_matrix):
     means_array = np.array(means_array)
     covariance_matrix = np.array(covariance_matrix)
     
+    if len(means_array) == 0:
+        print('Error, means array has zero length')
+        exit(-1)
     if len(data_array) != len(means_array):
-        print("Error, data and means arrays must have the same dimensionality")
+        print('Error, data and means arrays must have the same dimensionality')
         exit(-1)
     if len(covariance_matrix[:,0]) != len(covariance_matrix[0,:]) or len(covariance_matrix[:,0]) != len(data_array):
-        print("Error, invalid dimensionality for covariance matrix")
+        print('Error, invalid dimensionality for covariance matrix')
         exit(-1)
         
     # Compute determinant and inverse of covariance matrix
@@ -55,7 +58,7 @@ def multivariate_gaussian_pdf(data_array, means_array, covariance_matrix):
 
 
 # Data log likelihood for a mixture of Gaussians
-def gaussian_mixture_log_likelihood(X_labeled, y_array, X_unlabeled, all_priors, all_means, all_covariances, num_classes):
+def gaussian_mixture_log_likelihood(X_labeled, X_unlabeled, y_array, all_priors, all_means, all_covariances, num_classes):
     
     log_likelihood = 0.0
     # Labeled data likelihood
@@ -81,11 +84,10 @@ def gaussian_mixture_log_likelihood(X_labeled, y_array, X_unlabeled, all_priors,
 # Weights matrix is (instances, num_classes)
 def maximum_likelihood_estimation(X, weights, num_classes):
     if len(X) != len(weights):
-        print("Error, data and weights matrices are incompatible")
+        print('Error, data and weights matrices are incompatible')
         exit(-1)
         
     X = np.array(X)
-    weights = np.array(weights)
     # Store means arrays and covariance matrices for all classes
     all_priors = []
     all_means = []
@@ -122,13 +124,13 @@ def maximum_likelihood_estimation(X, weights, num_classes):
         
     return all_priors, all_means, all_covariances
     
-# 
+# Given both labeled and unlabeled data, use ELM iteratively to find a local maxima of the mixture log likelihood
 def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
     num_classes = 2
     X_labeled = np.array(X_labeled)
     X_unlabeled = np.array(X_unlabeled)
     y = np.array(y)
-    weights_labeled = np.transpose(np.vstack( (y, (1-y)) ))
+    weights_labeled = np.transpose(np.vstack( ((1-y), y) ))
     
     # Initialize MLE on labeled data
     # Priors are used for all instances
@@ -137,26 +139,47 @@ def expectation_maximization(X_labeled, X_unlabeled, y, num_iterations):
     ## Loop
     for _ in range(num_iterations):
         # Assign conditional probabilities p(y|x) to unlabeled data with Gaussian mixture
-        unlabeled_conditionals = []
+        unlabeled_posteriors = []
         for data_array in X_unlabeled:
             # Compute 
-            array_conditionals = []
+            array_posteriors = []
+            # TODO: for over a zip
             for j in range(num_classes):
+                # p(X|y)
                 class_conditional_prob = multivariate_gaussian_pdf(data_array, all_means[j], all_covariances[j])
-                # print(multivariate_normal(all_means[j], all_covariances[j]).pdf(data_array))
-                array_conditionals.append(all_priors[j] * class_conditional_prob)
-            
-            array_conditionals = np.array(array_conditionals)/sum(array_conditionals)
-            unlabeled_conditionals.append(array_conditionals)
+                array_posteriors.append(all_priors[j] * class_conditional_prob)
+            # p(y|X)
+            array_posteriors = np.array(array_posteriors)/sum(array_posteriors)
+            unlabeled_posteriors.append(array_posteriors)
         
         # Compute MLE on whole data
-        all_weights = np.vstack((weights_labeled, unlabeled_conditionals))
+        all_weights = np.vstack((weights_labeled, unlabeled_posteriors))
         all_priors, all_means, all_covariances = maximum_likelihood_estimation(np.vstack((X_labeled,X_unlabeled)), all_weights, num_classes)
 
         # Check for convergence
-        mixture_log_likelihood = gaussian_mixture_log_likelihood(X_labeled, y, X_unlabeled, all_priors, all_means, all_covariances, num_classes)
+        mixture_log_likelihood = gaussian_mixture_log_likelihood(X_labeled, X_unlabeled, y, all_priors, all_means, all_covariances, num_classes)
         # print(mixture_log_likelihood)
     
     return mixture_log_likelihood, all_priors, all_means, all_covariances
     
+# Given a dataset and the parameters for C multivariate Gaussians (C is the number of classes), return the predicted classes and posterior probabilities, i.e. p(y|X), of each data point belonging to each class
+def predict(X, all_priors, all_means, all_covariances):
+    predicted_posteriors = []
+    predicted_classes = []
+    for data_array in X:
+        # Predict probabilities
+        datapoint_posteriors = []
+        for class_prior, class_means, class_covs in zip(all_priors, all_means, all_covariances):
+            # p(X|y)
+            class_conditional_proba = multivariate_gaussian_pdf(data_array, class_means, class_covs)
+            datapoint_posteriors.append(class_prior * class_conditional_proba)
+        # p(y|X)
+        datapoint_posteriors = np.array(datapoint_posteriors)/sum(datapoint_posteriors)
+        predicted_posteriors.append(datapoint_posteriors[:])
+        
+        # Compute corresponding class (using 0.5 as threshold)
+        datapoint_class, _ = max(enumerate(datapoint_posteriors), key=lambda p: p[1])
+        predicted_classes.append(datapoint_class)
+        
     
+    return np.array(predicted_classes), np.array(predicted_posteriors)
