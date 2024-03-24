@@ -1,6 +1,10 @@
-# Semi-supervised drowsiness detection
+# Semi-supervised classification repository
 
-- Mixture models
+## Currently implemented:
+- Gaussian Mixture Models
+
+
+## Future implementations:
 - Cluster-then-label
 - Co-training
 - Manifold regularization
